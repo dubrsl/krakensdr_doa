@@ -1,0 +1,13 @@
+[Unit]
+Description=KrakenSDR
+After=network.target
+
+[Service]
+Type=forking
+WorkingDirectory=/root
+ExecStart=/bin/bash --login -c 'source /root/.bashrc; cd /root/krakensdr_doa && /root/krakensdr_doa/kraken_doa_start.sh -c'
+ExecStop=/root/krakensdr_doa/kraken_doa_stop.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

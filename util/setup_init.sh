@@ -1,4 +1,4 @@
-#/bin/bash!
+#!/bin/bash
 
 # PhP for android device support
 sudo apt install php7.4-cli
