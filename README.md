@@ -18,6 +18,14 @@ In this image the code will automatically run on boot. Note that it may take 2-3
 
 To run this code flash the image file to an SD Card using Etcher. The SD Card needs to be at least 8GB and we recommend using a class 10 card or faster. For advanced users the login/password details for SSH and terminal are "krakenrf"/"krakensdr"
 
+## Orange Pi 5B
+
+We also now have an Orange Pi 5B image available. The following instructions will reference the Pi 4, but they are identical for operation with the Orange Pi 5B. (Note this image is for the Orange Pi 5B. This is the Orange Pi 5 model with the included WiFi module.)
+
+**Orange Pi 5B Image**: https://mega.nz/folder/8T1jiIzR#_1Ujs4Eoy0wdRib9eHCVSg
+
+Download the latest image by date.
+
 ### Choose and Set up Connectivity Option 
 In this image there are three ways to connect to the web GUI interface.
 
@@ -45,7 +53,7 @@ To get the best performance we recommend adding aftermarket cooling to your Pi 4
     
 ### KerberosSDR Setup (KrakenSDR users Ignore)
 
-Consult the Wiki page at https://github.com/krakenrf/krakensdr_docs/wiki/11.-KerberosSDR-Setup-for-KrakenSDR-Software for information on setting up your KerberosSDR to work with the KrakenSDR software.
+Consult the Wiki page at https://github.com/krakenrf/krakensdr_docs/wiki/10.-KerberosSDR-Setup-for-KrakenSDR-Software for information on setting up your KerberosSDR to work with the KrakenSDR software.
 
 ## Software Quick Start
 
@@ -62,17 +70,17 @@ You can also 'click to tune' in the spectrum. Either by clicking on the spectrum
 ## VirtualBox Image
 If you do not wish to use a Pi 4 as your KrakenSDR computing device, you can also use a Windows or Linux Laptop/PC with our VirtualBox pre-made image. This image file is currently in beta. It includes the KrakenSDR DOA, Passive Radar, and GNU Radio software.
 
-See our Wiki for more information about our VirtualBox Image and where to download it https://github.com/krakenrf/krakensdr_docs/wiki/10.-VirtualBox-and-Docker-Images#virtualbox
+See our Wiki for more information about our VirtualBox Image and where to download it https://github.com/krakenrf/krakensdr_docs/wiki/09.-VirtualBox,-Docker-Images-and-Install-Scripts#virtualbox
 
 ## Docker Image
 
-See our Wiki for more information about the third party Docker image https://github.com/krakenrf/krakensdr_docs/wiki/10.-VirtualBox-and-Docker-Images#docker
+See our Wiki for more information about the third party Docker image https://github.com/krakenrf/krakensdr_docs/wiki/09.-VirtualBox,-Docker-Images-and-Install-Scripts#docker
 
 ## Manual Installation from a fresh OS
 
 ### Install script
 
-You can use on of our install scripts to automate a manual install. Details on the Wiki at https://github.com/krakenrf/krakensdr_docs/wiki/10.-VirtualBox,-Docker-Images-and-Install-Scripts#install-scripts
+You can use on of our install scripts to automate a manual install. Details on the Wiki at https://github.com/krakenrf/krakensdr_docs/wiki/09.-VirtualBox,-Docker-Images-and-Install-Scripts#install-scripts
 
 ###  Manual Install
 
@@ -148,7 +156,7 @@ Please be patient on the first run, as it can take 1-2 minutes for the JIT numba
 With remote operation you can run the DAQ on one machine on your network, and the DSP software on another. 
 
 1. Start the heimdall DAQ subsystem on your remote computing device. (Make sure that the `daq_chain_config.ini` contains the proper configuration) 
-    (See:https://github.com/krakenrf/heimdall_daq_fw/Documentation)
+    (See:https://github.com/krakenrf/heimdall_daq_fw/blob/main/Documentation/HDAQ_firmware_ver1.0.20201130.pdf)
 2. Set the IP address of the DAQ Subsystem in the `settings.json`, `default_ip` field.
 3. Start the DoA DSP software by typing:
 `./gui_run.sh`
@@ -158,6 +166,22 @@ With remote operation you can run the DAQ on one machine on your network, and th
 After starting the script a web based server opens at port number `8080`, which then can be accessed by typing `KRAKEN_IP:8080/` in the address bar of any web browser. You can find the IP address of the KrakenSDR Pi4 wither via your routers WiFi management page, or by typing `ip addr` into the terminal. You can also use the hostname of the Pi4 in place of the IP address, but this only works on local networks, and not the internet, or mobile hotspot networks.
 
 ![image](https://user-images.githubusercontent.com/78108016/175924475-2ce0a189-e119-4442-8893-0d32404847e2.png)
+
+## For Contributors
+
+If you plan to contribute code then it must follow certain formatting style. The easiest way to apply autoformatting and check for any [PEP8](https://peps.python.org/pep-0008/) violations is to install [`pre-commit`](https://pre-commit.com/) tool, e.g., with
+
+```bash
+pip3 install --user pre-commit
+```
+
+Then from within the `krakensdr_doa` folder execute:
+
+```bash
+pre-commit install
+```
+
+that would set up git pre-commit hooks. Those will autoformat and check changed files on every consecutive commits. Once you create PR for your changes, [GitHub Actions](https://github.com/features/actions) will be executed to perform the very same checks as the hooks to make sure your code follows the formatting style and does not violate PEP8 rules.
 
 ## Upcoming Features and Known Bugs
 
