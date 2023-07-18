@@ -34,6 +34,8 @@ import numpy as np
 # isort: off
 from variables import (
     DECORRELATION_OPTIONS,
+    HZ_TO_MHZ,
+    DOA_METHODS,
     trace_colors,
     doa_fig,
     root_path,
@@ -43,6 +45,7 @@ from variables import (
     daq_subsystem_path,
     daq_stop_filename,
     daq_start_filename,
+    shared_path,
 )
 
 # isort: on
@@ -59,19 +62,21 @@ from utils import read_config_file_dict, set_clicked
 from waterfall import init_waterfall
 
 # Load settings file
-settings_file_path = os.path.join(root_path, "settings.json")
+settings_file_path = os.path.join(shared_path, "settings.json")
 settings_found = False
 if os.path.exists(settings_file_path):
     settings_found = True
     with open(settings_file_path, "r") as myfile:
         dsp_settings = json.loads(myfile.read())
+else:
+    dsp_settings = dict()
 
 
 class webInterface:
     def __init__(self):
         self.user_interface = None
 
-        self.logging_level = dsp_settings.get("logging_level", 0) * 10
+        self.logging_level = dsp_settings.get("logging_level", 5) * 10
         logging.basicConfig(level=self.logging_level)
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.logging_level)
@@ -99,20 +104,26 @@ class webInterface:
 
         self.data_interface = dsp_settings.get("data_interface", "shmem")
 
+        default_center_frequency_mhz = 416.588
         # Instantiate and configure Kraken SDR modules
         self.module_receiver = ReceiverRTLSDR(
             data_que=self.rx_data_que, data_interface=self.data_interface, logging_level=self.logging_level
         )
-        self.module_receiver.daq_center_freq = float(dsp_settings.get("center_freq", 100.0)) * 10**6
-        self.module_receiver.daq_rx_gain = float(dsp_settings.get("uniform_gain", 1.4))
+        self.module_receiver.daq_center_freq = (
+            float(dsp_settings.get("center_freq", default_center_frequency_mhz)) * 10**6
+        )
+        self.module_receiver.daq_rx_gain = float(dsp_settings.get("uniform_gain", 15.7))
         self.module_receiver.rec_ip_addr = dsp_settings.get("default_ip", "0.0.0.0")
+
+        # Remote Control
+        self.remote_control = dsp_settings.get("en_remote_control", False)
 
         self.module_signal_processor = SignalProcessor(
             data_que=self.sp_data_que, module_receiver=self.module_receiver, logging_level=self.logging_level
         )
-        self.module_signal_processor.DOA_ant_alignment = dsp_settings.get("ant_arrangement", "ULA")
+        self.module_signal_processor.DOA_ant_alignment = dsp_settings.get("ant_arrangement", "UCA")
         self.module_signal_processor.doa_measure = self._doa_fig_type
-        self.ant_spacing_meters = float(dsp_settings.get("ant_spacing_meters", 0.5))
+        self.ant_spacing_meters = float(dsp_settings.get("ant_spacing_meters", 0.21))
 
         if self.module_signal_processor.DOA_ant_alignment == "UCA":
             self.module_signal_processor.DOA_UCA_radius_m = self.ant_spacing_meters
@@ -136,10 +147,10 @@ class webInterface:
         self.module_signal_processor.DOA_expected_num_of_sources = dsp_settings.get("expected_num_of_sources", 1)
 
         self.custom_array_x_meters = np.float_(
-            dsp_settings.get("custom_array_x_meters", "0.1,0.2,0.3,0.4,0.5").split(",")
+            dsp_settings.get("custom_array_x_meters", "0.21,0.06,-0.17,-0.17,0.07").split(",")
         )
         self.custom_array_y_meters = np.float_(
-            dsp_settings.get("custom_array_y_meters", "0.1,0.2,0.3,0.4,0.5").split(",")
+            dsp_settings.get("custom_array_y_meters", "0.00,-0.20,-0.12,0.12,0.20").split(",")
         )
         self.module_signal_processor.custom_array_x = self.custom_array_x_meters / (
             300 / float(dsp_settings.get("center_freq", 100.0))
@@ -149,7 +160,7 @@ class webInterface:
         )
         self.module_signal_processor.array_offset = int(dsp_settings.get("array_offset", 0))
 
-        self.module_signal_processor.en_DOA_estimation = dsp_settings.get("en_doa", 0)
+        self.module_signal_processor.en_DOA_estimation = dsp_settings.get("en_doa", True)
         self.module_signal_processor.DOA_decorrelation_method = dsp_settings.get("doa_decorrelation_method", "Off")
         self.module_signal_processor.start()
 
@@ -161,7 +172,7 @@ class webInterface:
         self.module_signal_processor.DOA_data_format = dsp_settings.get("doa_data_format", "Kraken App")
 
         # Station Information
-        self.module_signal_processor.station_id = dsp_settings.get("station_id", "NO-CALL")
+        self.module_signal_processor.station_id = dsp_settings.get("station_id", "NOCALL")
         self.location_source = dsp_settings.get("location_source", "None")
         self.module_signal_processor.latitude = dsp_settings.get("latitude", 0.0)
         self.module_signal_processor.longitude = dsp_settings.get("longitude", 0.0)
@@ -170,7 +181,7 @@ class webInterface:
         self.module_signal_processor.gps_min_duration_for_valid_heading = dsp_settings.get("gps_min_speed_duration", 3)
 
         # Kraken Pro Remote Key
-        self.module_signal_processor.krakenpro_key = dsp_settings.get("krakenpro_key", 0.0)
+        self.module_signal_processor.krakenpro_key = dsp_settings.get("krakenpro_key", "0ae4ca6b3")
 
         # VFO Configuration
         self.module_signal_processor.spectrum_fig_type = dsp_settings.get("spectrum_calculation", "Single")
@@ -178,20 +189,26 @@ class webInterface:
         self.module_signal_processor.vfo_default_demod = dsp_settings.get("vfo_default_demod", "None")
         self.module_signal_processor.vfo_default_iq = dsp_settings.get("vfo_default_iq", "False")
         self.module_signal_processor.max_demod_timeout = int(dsp_settings.get("max_demod_timeout", 60))
-        self.module_signal_processor.dsp_decimation = int(dsp_settings.get("dsp_decimation", 0))
-        self.module_signal_processor.active_vfos = int(dsp_settings.get("active_vfos", 0))
+        self.module_signal_processor.dsp_decimation = int(dsp_settings.get("dsp_decimation", 1))
+        self.module_signal_processor.active_vfos = int(dsp_settings.get("active_vfos", 1))
         self.module_signal_processor.output_vfo = int(dsp_settings.get("output_vfo", 0))
-        self.module_signal_processor.optimize_short_bursts = dsp_settings.get("en_optimize_short_bursts", 0)
-        self.module_signal_processor.en_peak_hold = dsp_settings.get("en_peak_hold", 0)
+        self.module_signal_processor.optimize_short_bursts = dsp_settings.get("en_optimize_short_bursts", False)
+        self.module_signal_processor.en_peak_hold = dsp_settings.get("en_peak_hold", False)
         self.selected_vfo = 0
 
         for i in range(self.module_signal_processor.max_vfos):
-            self.module_signal_processor.vfo_bw[i] = int(dsp_settings.get("vfo_bw_" + str(i), 0))
-            self.module_signal_processor.vfo_fir_order_factor[i] = int(
-                dsp_settings.get("vfo_fir_order_factor_" + str(i), DEFAULT_VFO_FIR_ORDER_FACTOR)
+            self.module_signal_processor.vfo_bw[i] = int(
+                dsp_settings.get("vfo_bw_" + str(i), self.module_signal_processor.vfo_bw[i])
             )
-            self.module_signal_processor.vfo_freq[i] = float(dsp_settings.get("vfo_freq_" + str(i), 0))
-            self.module_signal_processor.vfo_squelch[i] = int(dsp_settings.get("vfo_squelch_" + str(i), 0))
+            self.module_signal_processor.vfo_fir_order_factor[i] = int(
+                dsp_settings.get("vfo_fir_order_factor_" + str(i), self.module_signal_processor.vfo_fir_order_factor[i])
+            )
+            self.module_signal_processor.vfo_freq[i] = float(
+                dsp_settings.get("vfo_freq_" + str(i), self.module_receiver.daq_center_freq)
+            )
+            self.module_signal_processor.vfo_squelch[i] = int(
+                dsp_settings.get("vfo_squelch_" + str(i), self.module_signal_processor.vfo_squelch[i])
+            )
             self.module_signal_processor.vfo_demod[i] = dsp_settings.get("vfo_demod_" + str(i), "Default")
             self.module_signal_processor.vfo_iq[i] = dsp_settings.get("vfo_iq_" + str(i), "Default")
 
@@ -284,6 +301,9 @@ class webInterface:
             self.vfo_cfg_inputs.append(Input(component_id="vfo_" + str(i) + "_demod", component_property="value"))
             self.vfo_cfg_inputs.append(Input(component_id="vfo_" + str(i) + "_iq", component_property="value"))
 
+        if not settings_found:
+            self.save_configuration()
+
     def save_configuration(self):
         data = {}
 
@@ -292,6 +312,9 @@ class webInterface:
         data["uniform_gain"] = self.module_receiver.daq_rx_gain
         data["data_interface"] = dsp_settings.get("data_interface", "shmem")
         data["default_ip"] = dsp_settings.get("default_ip", "0.0.0.0")
+
+        # Remote Control
+        data["en_remote_control"] = self.remote_control
 
         # DOA Estimation
         data["en_doa"] = self.module_signal_processor.en_DOA_estimation
@@ -312,7 +335,7 @@ class webInterface:
 
         # Web Interface
         data["en_hw_check"] = dsp_settings.get("en_hw_check", 0)
-        data["logging_level"] = dsp_settings.get("logging_level", 0)
+        data["logging_level"] = dsp_settings.get("logging_level", 5)
         data["disable_tooltips"] = dsp_settings.get("disable_tooltips", 0)
 
         # Output Data format. XML for Kerberos, CSV for Kracken, JSON future
@@ -341,7 +364,7 @@ class webInterface:
         data["output_vfo"] = self.module_signal_processor.output_vfo
         data["en_optimize_short_bursts"] = self.module_signal_processor.optimize_short_bursts
 
-        for i in range(webInterface_inst.module_signal_processor.max_vfos):
+        for i in range(self.module_signal_processor.max_vfos):
             data["vfo_bw_" + str(i)] = self.module_signal_processor.vfo_bw[i]
             data["vfo_fir_order_factor_" + str(i)] = self.module_signal_processor.vfo_fir_order_factor[i]
             data["vfo_freq_" + str(i)] = self.module_signal_processor.vfo_freq[i]
@@ -593,6 +616,12 @@ def fetch_dsp_data():
                 webInterface_inst.max_doas_list = data_entry[1].copy()
             elif data_entry[0] == "DoA Squelch":
                 webInterface_inst.squelch_update = data_entry[1].copy()
+            elif data_entry[0] == "VFO-0 Frequency":
+                app.push_mods(
+                    {
+                        "vfo_0_freq": {"value": data_entry[1] * HZ_TO_MHZ},
+                    }
+                )
             else:
                 webInterface_inst.logger.warning("Unknown data entry: {:s}".format(data_entry[0]))
     except queue.Empty:
@@ -634,6 +663,8 @@ def settings_change_watcher():
 
         center_freq = float(dsp_settings.get("center_freq", 100.0))
         gain = float(dsp_settings.get("uniform_gain", 1.4))
+
+        webInterface_inst.remote_control = dsp_settings.get("en_remote_control", False)
 
         webInterface_inst.ant_spacing_meters = float(dsp_settings.get("ant_spacing_meters", 0.5))
 
@@ -715,7 +746,7 @@ def settings_change_watcher():
 
     webInterface_inst.last_changed_time_previous = last_changed_time
 
-    webInterface_inst.settings_change_timer = Timer(1, settings_change_watcher)
+    webInterface_inst.settings_change_timer = Timer(0.1, settings_change_watcher)
     webInterface_inst.settings_change_timer.start()
 
 
@@ -1294,6 +1325,37 @@ def toggle_custom_array_fields(toggle_value):
         return [{"display": "block"}, {"display": "block"}, {"display": "none"}]
 
 
+# Fallback to MUSIC if "Custom" arrangement is selected for ROOT-MUSIC
+@app.callback(
+    [Output("doa_method", "value")],
+    [Input("radio_ant_arrangement", "value")],
+)
+def fallback_custom_array_to_music(toggle_value):
+    if toggle_value == "Custom" and webInterface_inst.module_signal_processor.DOA_algorithm == "ROOT-MUSIC":
+        return ["MUSIC"]
+    else:
+        return [webInterface_inst.module_signal_processor.DOA_algorithm]
+
+
+# Disable ROOT-MUSIC if "Custom" arrangement is selected
+@app.callback(
+    [Output("doa_method", "options")],
+    [Input("radio_ant_arrangement", "value")],
+)
+def disable_root_music_for_custom_array(toggle_value):
+    if toggle_value == "Custom":
+        return [
+            [
+                dict(doa_method, disabled=True)
+                if doa_method["value"] == "ROOT-MUSIC"
+                else dict(doa_method, disabled=False)
+                for doa_method in DOA_METHODS
+            ]
+        ]
+    else:
+        return [[dict(doa_method, disabled=False) for doa_method in DOA_METHODS]]
+
+
 @app.callback(
     [
         Output(component_id="body_ant_spacing_wavelength", component_property="children"),
@@ -1302,6 +1364,7 @@ def toggle_custom_array_fields(toggle_value):
         Output(component_id="doa_decorrelation_method", component_property="options"),
         Output(component_id="doa_decorrelation_method", component_property="disabled"),
         Output(component_id="uca_decorrelation_warning", component_property="children"),
+        Output(component_id="uca_root_music_warning", component_property="children"),
         Output(component_id="expected_num_of_sources", component_property="options"),
         Output(component_id="expected_num_of_sources", component_property="disabled"),
     ],
@@ -1406,8 +1469,8 @@ def update_dsp_params(
     webInterface_inst.module_signal_processor.DOA_algorithm = doa_method
 
     is_odd_number_of_channels = webInterface_inst.module_signal_processor.channel_number % 2 != 0
-    is_decorrelation_applicable = ant_arrangement != "Custom" and is_odd_number_of_channels
     # UCA->VULA transformation works best if we have odd number of channels
+    is_decorrelation_applicable = ant_arrangement != "Custom" and is_odd_number_of_channels
     webInterface_inst.module_signal_processor.DOA_decorrelation_method = (
         doa_decorrelation_method if is_decorrelation_applicable else DECORRELATION_OPTIONS[0]["value"]
     )
@@ -1433,6 +1496,13 @@ def update_dsp_params(
     else:
         uca_decorrelation_warning = ""
 
+    if ant_arrangement == "UCA" and doa_method == "ROOT-MUSIC":
+        uca_root_music_warning = "WARNING: Using ROOT-MUSIC method with UCA array is still experimental as it might produce inconsistent results."
+    elif ant_arrangement == "Custom" and doa_method == "ROOT-MUSIC":
+        uca_root_music_warning = "WARNING: ROOT-MUSIC cannot be used with 'Custom' antenna arrangement."
+    else:
+        uca_root_music_warning = ""
+
     webInterface_inst.module_signal_processor.DOA_ant_alignment = ant_arrangement
     webInterface_inst._doa_fig_type = doa_fig_type
     webInterface_inst.module_signal_processor.doa_measure = doa_fig_type
@@ -1455,7 +1525,7 @@ def update_dsp_params(
             }
             for c in range(1, webInterface_inst.module_signal_processor.channel_number)
         ]
-        if doa_method == "MUSIC"
+        if "MUSIC" in doa_method
         else [
             {
                 "label": "N/A",
@@ -1465,7 +1535,7 @@ def update_dsp_params(
         ]
     )
 
-    num_of_sources_state = False if doa_method == "MUSIC" else True
+    num_of_sources_state = False if "MUSIC" in doa_method else True
 
     return [
         str(ant_spacing_wavelength),
@@ -1474,6 +1544,7 @@ def update_dsp_params(
         doa_decorrelation_method_options,
         doa_decorrelation_method_state,
         uca_decorrelation_warning,
+        uca_root_music_warning,
         num_of_sources,
         num_of_sources_state,
     ]

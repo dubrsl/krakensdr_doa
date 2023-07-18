@@ -19,6 +19,7 @@ daq_config_filename = os.path.join(daq_subsystem_path, "daq_chain_config.ini")
 receiver_path = os.path.join(root_path, "_receiver")
 signal_processor_path = os.path.join(root_path, "_signal_processing")
 ui_path = os.path.join(root_path, "_UI")
+shared_path = os.path.join(root_path, "_share")
 
 sys.path.insert(0, receiver_path)
 sys.path.insert(0, signal_processor_path)
@@ -78,3 +79,14 @@ DECORRELATION_OPTIONS = [
     {"label": "Spatial Smoothing", "value": "FBSS"},
     {"label": "F-B Toeplitz", "value": "FBTOEP"},
 ]
+
+DOA_METHODS = [
+    {"label": "Bartlett", "value": "Bartlett"},
+    {"label": "Capon", "value": "Capon"},
+    {"label": "MEM", "value": "MEM"},
+    {"label": "TNA", "value": "TNA"},
+    {"label": "MUSIC", "value": "MUSIC"},
+    {"label": "ROOT-MUSIC", "value": "ROOT-MUSIC"},
+]
+
+HZ_TO_MHZ = 1.0e-6
