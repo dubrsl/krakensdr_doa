@@ -251,7 +251,11 @@ class SignalProcessor(threading.Thread):
         if auto_squelch:
             measured_spec_mean = np.mean(measured_spec)
             vfo_auto_squelch = measured_spec_mean + self.default_auto_db_offset
-            self.vfo_squelch = [vfo_auto_squelch] * self.max_vfos
+
+            for i in range(len(self.vfo_squelch)):
+                auto_squelch = is_enabled_auto_squelch(self.vfo_squelch_mode[i])
+                if auto_squelch:
+                    self.vfo_squelch[i] = vfo_auto_squelch
 
     def calculate_squelch(self, sampling_freq, N, measured_spec, real_freqs):
         def find_nearest(array, value):
@@ -272,7 +276,7 @@ class SignalProcessor(threading.Thread):
                 vfo_freq_window = int(freq_window + vfo_bw_freq_window / 2)
                 vfo_start_measure_spec = freq_idx - min(abs(freq_idx), vfo_freq_window)
                 vfo_end_measure_spec = freq_idx + min(abs(len(measured_spec) - freq_idx), vfo_freq_window)
-                measured_spec_mean = jit_mean(measured_spec[vfo_start_measure_spec:vfo_end_measure_spec])
+                measured_spec_mean = np.mean(measured_spec[vfo_start_measure_spec:vfo_end_measure_spec])
                 self.vfo_squelch[i] = measured_spec_mean + self.default_auto_channel_db_offset
 
     def run(self):
@@ -1213,11 +1217,6 @@ def calc_sync(iq_samples):
     iq_diffs /= iq_diffs[0]
 
     return iq_diffs
-
-
-@njit(fastmath=True)
-def jit_mean(arr):
-    return np.mean(arr)
 
 
 # Reduce spectrum size for plotting purposes by taking the MAX val every few values
